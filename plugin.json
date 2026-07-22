@@ -1,7 +1,7 @@
 {
   "name": "TunnelDeck",
   "author": "DaAndi01",
-  "flags": ["_root"],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["vpn", "root"],
