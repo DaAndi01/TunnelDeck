@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# The networkmanager-openvpn package pinned in openvpn.list, and the SHA-256 it
+# MUST match. The image is extracted as root and mounted into the system via
+# systemd-sysext, so an unverified download would be a root-level supply-chain
+# risk. Update both values together if the pinned package ever changes.
+PKG="networkmanager-openvpn-1.10.0-1-x86_64.pkg.tar.zst"
+PKG_SHA256="07f5c45ebfbae9a2332d4c083265bfe1a6e892f85fea1984fab0da9b6d098e03"
+
+# Check if the networkmanager-openvpn package has been installed manually.
+# If it has, we can skip the mounting of the plugin provided image.
+if pacman -Qi networkmanager-openvpn &>/dev/null; then
+  exit 0
+fi
+
+OS_ID="ID=steamos"
+VERSION_ID=$(grep VERSION_ID /etc/os-release)
+EXTENSION_RELEASE="./networkmanager-openvpn/usr/lib/extension-release.d/extension-release.networkmanager-openvpn"
+OVPN_EXTENSION_SRC="$PWD/networkmanager-openvpn.raw"
+OVPN_EXTENSION_DEST="/var/lib/extensions/networkmanager-openvpn.raw"
+
+# Download and verify the package.
+if [ ! -f "./$PKG" ]; then
+  wget -i ./openvpn.list
+
+  # SECURITY: verify the downloaded package against the pinned SHA-256 before
+  # extracting/mounting it as root. Abort (and remove the file) on any mismatch.
+  if ! echo "${PKG_SHA256}  ./${PKG}" | sha256sum -c -; then
+    echo "TunnelDeck: SHA-256 verification of ${PKG} FAILED. Aborting install." >&2
+    rm -f "./${PKG}"
+    exit 1
+  fi
+
+  mkdir -p networkmanager-openvpn
+  tar --use-compress-program=unzstd -xvf "./$PKG" -C networkmanager-openvpn
+  mkdir -p ./networkmanager-openvpn/usr/lib/extension-release.d/
+  touch "$EXTENSION_RELEASE"
+fi
+
+# Rebuild the sysext image if the current OS VERSION_ID does not match.
+if ! grep -q "$VERSION_ID" "$EXTENSION_RELEASE"; then
+  rm -f "$OVPN_EXTENSION_SRC"
+  rm -f "$EXTENSION_RELEASE"
+  touch "$EXTENSION_RELEASE"
+  echo "$OS_ID" > "$EXTENSION_RELEASE"
+  echo "$VERSION_ID" >> "$EXTENSION_RELEASE"
+  chown -R root:root networkmanager-openvpn
+  mksquashfs networkmanager-openvpn "$OVPN_EXTENSION_SRC"
+fi
+
+mkdir -p /var/lib/extensions >/dev/null 2>&1
+
+if [ ! -f "$OVPN_EXTENSION_DEST" ]; then
+  ln -s "$OVPN_EXTENSION_SRC" "$OVPN_EXTENSION_DEST"
+fi
+
+if ! systemctl is-active --quiet systemd-sysext; then
+  systemctl enable systemd-sysext
+  systemctl start systemd-sysext
+  systemd-sysext refresh
+  /usr/share/libalpm/scripts/systemd-hook sysusers
+  /usr/share/libalpm/scripts/systemd-hook reload dbus
+  systemctl restart NetworkManager
+fi

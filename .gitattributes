@@ -1,0 +1,7 @@
+# Shell scripts and the Python backend must use LF line endings so they run on
+# the (Linux) Steam Deck, regardless of the OS the plugin is built on.
+* text=auto eol=lf
+defaults/extensions/install text eol=lf
+defaults/extensions/uninstall text eol=lf
+*.sh text eol=lf
+*.py text eol=lf

@@ -1,0 +1,11 @@
+{
+  "name": "TunnelDeck",
+  "author": "DaAndi01",
+  "flags": ["_root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["vpn", "root"],
+    "description": "Enables OpenVPN and WireGuard VPN support within Gaming Mode and activates OpenVPN support for Network Manager.",
+    "image": "https://user-images.githubusercontent.com/1169297/199478837-e3676b09-50a4-463b-ba03-46974d96537c.png"
+  }
+}
