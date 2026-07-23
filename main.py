@@ -99,6 +99,27 @@ def get_active_connection():
     return next(filter(lambda xn: 'wireless' in xn["type"] or 'ethernet' in xn["type"], mapped), None)
 
 
+# nmcli reports OpenVPN tunnels as type "vpn" and WireGuard tunnels as "wireguard".
+_VPN_TYPES = ("vpn", "wireguard")
+
+
+def get_active_vpn_connections():
+    result = subprocess.run(["nmcli", "-t", "connection", "show", "--active"],
+                            text=True, capture_output=True).stdout
+    mapped = map(connection_mapper, result.splitlines())
+    return [xn for xn in mapped if xn["type"] in _VPN_TYPES]
+
+
+def _system_uptime_seconds():
+    # /proc/uptime is the cheapest reliable "how long since boot" signal on Linux.
+    try:
+        with open("/proc/uptime", "r") as fh:
+            return float(fh.read().split()[0])
+    except Exception as err:
+        logger.debug("Could not read /proc/uptime: %s", err)
+        return None
+
+
 def run_install_script():
     logger.info("Running Install Script")
     subprocess.run(["bash", path.dirname(__file__) + "/extensions/install"],
@@ -139,10 +160,37 @@ class Plugin:
     async def _main(self):
         logger.info("Loading OpenVPN setting")
         await self.reset_cached_data()
+        await self.disconnect_vpns_on_boot()
         openvpn_enabled = _get_setting("openvpn_enabled", False)
         logger.info("OpenVPN enabled: " + ("yes" if openvpn_enabled else "no"))
         if openvpn_enabled:
             run_install_script()
+
+    # On a fresh boot NetworkManager re-activates any VPN whose profile still has
+    # autoconnect=yes. That tunnel comes up before Steam signs in and can block the
+    # login, so we tear down any VPN active this early. Guarded by uptime: a plugin
+    # reload mid-session must NOT kill a tunnel the user just brought up.
+    async def disconnect_vpns_on_boot(self):
+        uptime = _system_uptime_seconds()
+        if uptime is not None and uptime > 180:
+            logger.info("Skipping boot VPN teardown (uptime %.0fs, likely a plugin reload)", uptime)
+            return
+
+        active = get_active_vpn_connections()
+        if not active:
+            logger.info("No VPN active at boot - nothing to disconnect")
+            return
+
+        for conn in active:
+            uuid = conn["uuid"]
+            if not _is_safe_id(uuid):
+                logger.error("Skipping boot teardown of VPN with unsafe uuid: %r", uuid)
+                continue
+            logger.info("Disconnecting VPN active at boot: %s (%s)", conn["name"], uuid)
+            subprocess.run(["nmcli", "connection", "down", uuid], text=True, capture_output=True)
+            # Also stop it auto-connecting on the next boot so this only ever needs to happen once.
+            subprocess.run(["nmcli", "connection", "modify", uuid, "connection.autoconnect", "no"],
+                           text=True, capture_output=True)
 
     async def _unload(self):
         openvpn_enabled = _get_setting("openvpn_enabled", False)
@@ -399,6 +447,10 @@ class Plugin:
         logger.info("OPENING connection to: " + uuid)
         await self.reset_cached_data()
         result = subprocess.run(["nmcli", "connection", "up", uuid], text=True, capture_output=True).stdout
+        # TunnelDeck manages VPNs on demand, so keep NetworkManager from auto-reconnecting
+        # this tunnel on the next boot (which would come up before Steam and block sign-in).
+        subprocess.run(["nmcli", "connection", "modify", uuid, "connection.autoconnect", "no"],
+                       text=True, capture_output=True)
         return result
 
     # Closes a connection to a VPN (works for OpenVPN and WireGuard connections).
