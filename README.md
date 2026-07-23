@@ -65,6 +65,30 @@ Then copy the plugin folder to `~/homebrew/plugins/TunnelDeck` on the Deck (Deck
 developer mode / SSH), or zip it for installation. The folder must contain
 `plugin.json`, `main.py`, `dist/`, and `defaults/`.
 
+## Install on the Deck
+
+`dist/index.js` is committed, so no build step is needed on the Deck.
+
+**Option A — download the ZIP** (no git needed):
+
+<https://github.com/DaAndi01/TunnelDeck/archive/refs/heads/main.zip>
+
+Extract it and copy the folder to `~/homebrew/plugins/TunnelDeck` on the Deck
+(the extracted folder is named `TunnelDeck-main` — rename it), then restart the
+loader:
+
+```bash
+sudo systemctl restart plugin_loader
+```
+
+**Option B — git clone:**
+
+```bash
+cd ~/homebrew/plugins
+sudo git clone https://github.com/DaAndi01/TunnelDeck.git
+sudo systemctl restart plugin_loader
+```
+
 ## Credits
 
 - [Stephen Radford](https://github.com/steve228uk) — original author
