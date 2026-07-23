@@ -363,7 +363,9 @@ class Plugin:
             self.current_data['ping_results'].append({'address': address, 'could_ping': False})
             return False
 
-        ping_res = not bool(ping_data.stderr)
+        # A ping with no reply exits non-zero but writes nothing to stderr, so
+        # the exit code (not stderr) is the reliable success signal.
+        ping_res = ping_data.returncode == 0
         if not ping_res:
             self.current_data['ping_results'].append({'address': address, 'could_ping': False})
         else:

@@ -240,7 +240,7 @@ function Content() {
 
         {connections.length > 0 &&
           connections.map((connection) => (
-            <PanelSectionRow>
+            <PanelSectionRow key={connection.uuid}>
               <ToggleField
                 bottomSeparator="standard"
                 checked={connection.connected}
@@ -310,8 +310,8 @@ function Content() {
         )}
 
         {priorityNetworkInfo.length > 0 &&
-          priorityNetworkInfo.map((infoItem) => (
-            <PanelSectionRow>
+          priorityNetworkInfo.map((infoItem, index) => (
+            <PanelSectionRow key={index}>
               <Field description={infoItem} focusable={true} padding={"none"} />
             </PanelSectionRow>
           ))}
